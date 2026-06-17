@@ -5,6 +5,8 @@ import {
   isDemoSessionToken,
   setToken,
 } from './tokenStore';
+import { getApiBaseUrl } from '../config/apiConfig';
+import { warmupApi } from './apiWarmup';
 
 export interface AuthUser {
   id: string;
@@ -52,7 +54,7 @@ function unwrapAuthResponse(data: ApiAuthPayload): LoginResponse {
   };
 }
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_BASE = getApiBaseUrl();
 
 const CLIENT_DEMO_USER = {
   id: 'demo-client-1',
@@ -112,6 +114,7 @@ export const authService = {
     const trimmed = identifier.trim();
 
     try {
+      await warmupApi();
       const raw = (await api.post('/auth/login', {
         identifier: trimmed,
         password,
@@ -152,6 +155,7 @@ export const authService = {
     phone: string,
     purpose: OtpPurpose = 'signup'
   ): Promise<{ expiresIn: number; phone: string; resendAfter: number }> {
+    await warmupApi();
     const raw = (await api.post('/auth/send-otp', {
       phone: phone.trim(),
       purpose,
@@ -223,6 +227,7 @@ export const authService = {
     otp: string,
     role: 'client' | 'technician' = 'client'
   ): Promise<LoginResponse> {
+    await warmupApi();
     const raw = (await api.post('/auth/login/phone', {
       phone: phone.trim(),
       otp: otp.trim(),

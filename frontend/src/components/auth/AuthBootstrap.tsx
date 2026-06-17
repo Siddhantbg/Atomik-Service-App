@@ -4,6 +4,7 @@ import { useDispatch } from 'react-redux';
 import { sessionRestoreFailed, logout } from '../../store/authSlice';
 import { setUnauthorizedHandler } from '../../services/api';
 import { clearToken, purgeDemoSessionToken } from '../../services/tokenStore';
+import { warmupApi } from '../../services/apiWarmup';
 import { COLORS } from '../../constants/colors';
 
 interface Props {
@@ -24,6 +25,7 @@ export const AuthBootstrap: React.FC<Props> = ({ children }) => {
         await purgeDemoSessionToken();
         await clearToken();
         dispatch(sessionRestoreFailed());
+        void warmupApi();
       } finally {
         setReady(true);
       }

@@ -1,11 +1,12 @@
 import axios from 'axios';
 import { clearToken, getToken, isDemoSessionToken } from './tokenStore';
+import { API_TIMEOUT_MS, getApiBaseUrl } from '../config/apiConfig';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
+const BASE_URL = getApiBaseUrl();
 
 const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
+  timeout: API_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -46,11 +47,11 @@ api.interceptors.response.use(
       const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
       const hint = isDev
         ? 'Cannot reach API. Check backend is running and EXPO_PUBLIC_API_URL uses your PC LAN IP.'
-        : 'Cannot reach API. The production server may be down or the app was built without a valid API URL.';
+        : 'Cannot reach API. The server may be waking up (free hosting) — wait a moment and try again.';
       return Promise.reject(
         new Error(
           error.code === 'ECONNABORTED'
-            ? `Request timed out. ${hint}`
+            ? `Request timed out. ${isDev ? hint : 'Server is starting up — please try again in a few seconds.'}`
             : `Network error. ${hint}`
         )
       );
