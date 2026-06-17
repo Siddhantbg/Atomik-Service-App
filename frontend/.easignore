@@ -1,0 +1,21 @@
+# Shrink EAS upload (faster free-tier builds)
+/releases/
+**/*.aab
+**/*.apk
+google-play-feature-graphic-atomik.png
+atomik-logo-hero.png
+expo-qr.png
+node_modules/
+.expo/
+dist/
+web-build/
+android/
+ios/
+scripts/
+*.md
+!README.md
+!PLAY_STORE_RELEASE.md
+../backend/
+../ServiceAppGuide/
+../*.pptx
+../*.py

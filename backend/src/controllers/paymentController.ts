@@ -1,0 +1,336 @@
+import { Response, NextFunction } from 'express';
+import { Invoice } from '../models/Invoice';
+import { Booking } from '../models/Booking';
+import { AuthRequest } from '../middleware/auth';
+import {
+  createOrder,
+  verifyPaymentSignature,
+  isRazorpayConfigured,
+  createDemoPaymentIds,
+  isDemoPaymentAllowed,
+  isRazorpayAuthError,
+} from '../utils/razorpay';
+import { parseInvoiceStatus } from '../utils/mongoQuery';
+import { settleInvoicePayment } from '../services/paymentSettlement';
+import {
+  getExtraPartsChargeAmount,
+  getInvoiceBalanceDue,
+  shouldPayExtraPartsOnly,
+  ensureInvoiceReflectsBookingSpareParts,
+  buildPaymentHistoryForClient,
+} from '../utils/bookingPayment';
+import { RazorpayWebhookRequest } from '../middleware/razorpayWebhook';
+
+export const createPaymentOrder = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (process.env.NODE_ENV === 'production' && !isRazorpayConfigured()) {
+      res.status(503).json({ success: false, message: 'Payments are temporarily unavailable' });
+      return;
+    }
+
+    const { invoiceId, payFor } = req.body as {
+      invoiceId: string;
+      payFor?: 'full' | 'extra_parts';
+    };
+    const invoice = await Invoice.findById(invoiceId);
+    if (!invoice) {
+      res.status(404).json({ success: false, message: 'Invoice not found' });
+      return;
+    }
+
+    if (invoice.clientId.toString() !== req.user!.id) {
+      res.status(403).json({ success: false, message: 'Access denied' });
+      return;
+    }
+
+    const booking = await Booking.findById(invoice.bookingId).select('spareParts');
+    const spareLines = booking?.spareParts as
+      | { name?: string; quantity?: number; unitCost?: number }[]
+      | undefined;
+
+    const balanceDue = getInvoiceBalanceDue(invoice);
+    if (balanceDue <= 0) {
+      res.status(400).json({ success: false, message: 'Invoice already paid' });
+      return;
+    }
+
+    const extraCharge = getExtraPartsChargeAmount(invoice, spareLines);
+    const chargeAmount =
+      payFor === 'extra_parts' ? extraCharge : balanceDue;
+
+    if (payFor === 'extra_parts') {
+      if (!shouldPayExtraPartsOnly(invoice, spareLines) || chargeAmount <= 0) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Extra-parts-only payment applies after the base invoice is paid. Pay the full balance instead.',
+        });
+        return;
+      }
+    }
+
+    if (chargeAmount <= 0) {
+      res.status(400).json({ success: false, message: 'Nothing due on this invoice' });
+      return;
+    }
+
+    const respondDemoOrder = async (note: string) => {
+      const demo = createDemoPaymentIds(String(invoice._id));
+      await Invoice.findByIdAndUpdate(invoiceId, { razorpayOrderId: demo.orderId });
+
+      res.status(200).json({
+        success: true,
+        demo: true,
+        message: note,
+        order: {
+          id: demo.orderId,
+          amount: Math.round(chargeAmount * 100),
+          currency: 'INR',
+        },
+        invoice: {
+          invoiceNumber: invoice.invoiceNumber,
+          totalAmount: invoice.totalAmount,
+          balanceDue: chargeAmount,
+          spareParts: invoice.spareParts ?? 0,
+        },
+        key: 'demo',
+        demoPayment: demo,
+      });
+    };
+
+    if (isDemoPaymentAllowed(req)) {
+      await respondDemoOrder(
+        'Demo payment mode — Razorpay keys not configured or RAZORPAY_FORCE_DEMO=true'
+      );
+      return;
+    }
+
+    try {
+      const order = await createOrder(chargeAmount, 'INR', invoice.invoiceNumber);
+
+      await Invoice.findByIdAndUpdate(invoiceId, { razorpayOrderId: order.id });
+
+      res.status(200).json({
+        success: true,
+        demo: false,
+        order: {
+          id: order.id,
+          amount: order.amount,
+          currency: order.currency,
+        },
+        invoice: {
+          invoiceNumber: invoice.invoiceNumber,
+          totalAmount: invoice.totalAmount,
+          balanceDue: chargeAmount,
+          spareParts: invoice.spareParts ?? 0,
+        },
+        key: process.env.RAZORPAY_KEY_ID,
+      });
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production' && isRazorpayAuthError(err)) {
+        console.warn(
+          '[payments] Razorpay authentication failed — falling back to demo payment in development'
+        );
+        await respondDemoOrder(
+          'Demo payment mode — Razorpay test keys invalid. Update backend/.env with keys from dashboard.razorpay.com'
+        );
+        return;
+      }
+      next(err);
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const verifyPayment = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { invoiceId, razorpay_order_id, razorpay_payment_id, razorpay_signature } =
+      req.body;
+
+    const orderId = String(razorpay_order_id);
+    const paymentId = String(razorpay_payment_id);
+
+    const isDemoPayment =
+      orderId.startsWith('demo_order_') || paymentId.startsWith('demo_pay_');
+
+    if (isDemoPayment) {
+      if (!isDemoPaymentAllowed(req)) {
+        res.status(403).json({ success: false, message: 'Demo payments are not allowed' });
+        return;
+      }
+
+      const invoice = await settleInvoicePayment({
+        invoiceId: String(invoiceId),
+        clientId: req.user!.id,
+        razorpayOrderId: orderId,
+        razorpayPaymentId: paymentId,
+        updatedByUserId: req.user!.id,
+      });
+
+      if (!invoice) {
+        res.status(400).json({
+          success: false,
+          message: 'Invoice not found, already paid, or order mismatch',
+        });
+        return;
+      }
+
+      res.status(200).json({ success: true, message: 'Demo payment verified', invoice });
+      return;
+    }
+
+    const isValid = verifyPaymentSignature(orderId, paymentId, String(razorpay_signature));
+    if (!isValid) {
+      res.status(400).json({ success: false, message: 'Payment verification failed' });
+      return;
+    }
+
+    const invoice = await settleInvoicePayment({
+      invoiceId: String(invoiceId),
+      clientId: req.user!.id,
+      razorpayOrderId: orderId,
+      razorpayPaymentId: paymentId,
+      updatedByUserId: req.user!.id,
+    });
+
+    if (!invoice) {
+      res.status(400).json({
+        success: false,
+        message: 'Invoice not found, already paid, or order mismatch',
+      });
+      return;
+    }
+
+    res.status(200).json({ success: true, message: 'Payment verified', invoice });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const razorpayWebhook = async (
+  req: RazorpayWebhookRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const body = req.webhookBody as {
+      event?: string;
+      payload?: { payment?: { entity?: { order_id?: string; id?: string; amount?: number } } };
+    };
+
+    const event = body?.event;
+    const payment = body?.payload?.payment?.entity;
+
+    if (event !== 'payment.captured' || !payment?.order_id || !payment?.id) {
+      res.status(200).json({ received: true });
+      return;
+    }
+
+    const existing = await Invoice.findOne({ razorpayOrderId: payment.order_id });
+    if (!existing) {
+      res.status(200).json({ received: true });
+      return;
+    }
+
+    if (payment.amount != null) {
+      const spareBooking = await Booking.findById(existing.bookingId).select(
+        'spareParts'
+      );
+      const balanceDue = getInvoiceBalanceDue(existing);
+      const extraCharge = getExtraPartsChargeAmount(
+        existing,
+        spareBooking?.spareParts as { name?: string; quantity?: number; unitCost?: number }[]
+      );
+      const expectedAmount =
+        extraCharge > 0 && extraCharge < balanceDue ? extraCharge : balanceDue;
+      const expectedPaise = Math.round(expectedAmount * 100);
+      if (payment.amount !== expectedPaise) {
+        console.error(
+          `[webhook] Amount mismatch for order ${payment.order_id}: expected ${expectedPaise}, got ${payment.amount}`
+        );
+        res.status(200).json({ received: true });
+        return;
+      }
+    }
+
+    await settleInvoicePayment({
+      invoiceId: existing._id.toString(),
+      razorpayOrderId: payment.order_id,
+      razorpayPaymentId: payment.id,
+    });
+
+    res.status(200).json({ received: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getMyInvoices = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const status = parseInvoiceStatus(req.query.status);
+    const filter: Record<string, unknown> = { clientId: req.user!.id };
+    if (status) filter.status = status;
+
+    const invoices = await Invoice.find(filter)
+      .populate('bookingId', 'bookingId serviceType scheduledDate spareParts')
+      .sort({ createdAt: -1 });
+
+    for (const inv of invoices) {
+      const booking = inv.bookingId as {
+        _id?: unknown;
+        spareParts?: { name?: string; quantity?: number; unitCost?: number }[];
+      } | null;
+      const lines = booking?.spareParts;
+      if (!lines?.length || !booking?._id) continue;
+      await ensureInvoiceReflectsBookingSpareParts(String(booking._id), lines);
+    }
+
+    const refreshed =
+      invoices.length > 0
+        ? await Invoice.find({ _id: { $in: invoices.map((i) => i._id) } })
+            .populate('bookingId', 'bookingId serviceType scheduledDate spareParts')
+            .sort({ createdAt: -1 })
+        : [];
+
+    const serialized = refreshed.map((inv) => {
+      const obj = inv.toObject();
+      let amountPaid = obj.amountPaid ?? 0;
+      if (obj.status === 'paid' && amountPaid === 0) {
+        amountPaid = obj.totalAmount ?? 0;
+      }
+      const balanceDue = getInvoiceBalanceDue({ ...obj, amountPaid });
+      const paymentHistory = buildPaymentHistoryForClient({ ...obj, amountPaid }).map(
+        (entry) => ({
+          amount: Number(entry.amount) || 0,
+          type: entry.type,
+          paidAt: entry.paidAt,
+          razorpayOrderId: entry.razorpayOrderId,
+          razorpayPaymentId: entry.razorpayPaymentId,
+        })
+      );
+      return {
+        ...obj,
+        amountPaid,
+        balanceDue,
+        paymentHistory,
+      };
+    });
+
+    res.status(200).json({ success: true, invoices: serialized });
+  } catch (err) {
+    next(err);
+  }
+};

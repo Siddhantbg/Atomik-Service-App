@@ -1,0 +1,52 @@
+import mongoose from 'mongoose';
+import { Notification } from '../models/Notification';
+
+export const resolveUserId = (
+  ref:
+    | mongoose.Types.ObjectId
+    | { _id?: mongoose.Types.ObjectId }
+    | string
+    | undefined
+): mongoose.Types.ObjectId | null => {
+  if (!ref) return null;
+  if (typeof ref === 'object' && '_id' in ref && ref._id) {
+    return ref._id as mongoose.Types.ObjectId;
+  }
+  return ref as mongoose.Types.ObjectId;
+};
+
+export const formatStatusLabel = (status: string): string =>
+  status.replace(/_/g, ' ');
+
+export const notifyClientBooking = async (
+  booking: {
+    _id: mongoose.Types.ObjectId;
+    bookingId: string;
+    clientId: mongoose.Types.ObjectId | { _id?: mongoose.Types.ObjectId };
+  },
+  payload: {
+    title: string;
+    body: string;
+    type?: 'info' | 'success' | 'warning' | 'error';
+  }
+): Promise<void> => {
+  const userId = resolveUserId(booking.clientId);
+  if (!userId) return;
+
+  await Notification.create({
+    userId,
+    title: payload.title,
+    body: payload.body,
+    type: payload.type ?? 'info',
+    category: 'booking',
+    data: { bookingId: booking._id },
+  });
+};
+
+export const technicianContactLabel = (tech?: {
+  name?: string;
+  phone?: string;
+} | null): string => {
+  if (!tech?.name) return 'Your technician';
+  return tech.phone ? `${tech.name} (${tech.phone})` : tech.name;
+};
