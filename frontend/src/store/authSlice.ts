@@ -61,7 +61,8 @@ const authSlice = createSlice({
       state.user = action.payload.user;
       state.token = action.payload.token;
       state.isAuthenticated = true;
-      state.isOnboarded = action.payload.user.role !== 'client';
+      // Returning user with a persisted session has already onboarded.
+      state.isOnboarded = true;
       state.initializing = false;
     },
     sessionRestoreFailed: (state) => {

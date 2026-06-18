@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useDispatch } from 'react-redux';
-import { sessionRestoreFailed, logout } from '../../store/authSlice';
+import { sessionRestoreFailed, restoreSession, logout } from '../../store/authSlice';
 import { setUnauthorizedHandler } from '../../services/api';
-import { clearToken, purgeDemoSessionToken } from '../../services/tokenStore';
+import { purgeDemoSessionToken } from '../../services/tokenStore';
+import { authService } from '../../services/auth';
 import { warmupApi } from '../../services/apiWarmup';
 import { COLORS } from '../../constants/colors';
 
@@ -23,9 +24,16 @@ export const AuthBootstrap: React.FC<Props> = ({ children }) => {
     const bootstrap = async () => {
       try {
         await purgeDemoSessionToken();
-        await clearToken();
+        // Wake the API first so session validation does not fail on a cold start.
+        await warmupApi();
+        const session = await authService.loadStoredSession();
+        if (session) {
+          dispatch(restoreSession(session));
+        } else {
+          dispatch(sessionRestoreFailed());
+        }
+      } catch {
         dispatch(sessionRestoreFailed());
-        void warmupApi();
       } finally {
         setReady(true);
       }

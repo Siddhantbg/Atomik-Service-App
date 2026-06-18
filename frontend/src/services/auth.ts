@@ -2,7 +2,9 @@ import api from './api';
 import {
   clearToken,
   getToken,
+  getCachedUser,
   isDemoSessionToken,
+  setCachedUser,
   setToken,
 } from './tokenStore';
 import { getApiBaseUrl } from '../config/apiConfig';
@@ -90,7 +92,7 @@ function tryDemoLogin(email: string, password: string): LoginResponse | null {
   };
 }
 
-function isNetworkError(err: unknown): boolean {
+export function isNetworkError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const msg = err.message.toLowerCase();
   return (
@@ -121,6 +123,7 @@ export const authService = {
       })) as ApiAuthPayload;
       const data = unwrapAuthResponse(raw);
       await setToken(data.token);
+      await setCachedUser(data.user);
       return data;
     } catch (err) {
       const offlineDemo = tryDemoLogin(trimmed, password);
@@ -219,6 +222,7 @@ export const authService = {
     })) as ApiAuthPayload;
     const data = unwrapAuthResponse(raw);
     await setToken(data.token);
+    await setCachedUser(data.user);
     return data;
   },
 
@@ -235,6 +239,7 @@ export const authService = {
     })) as ApiAuthPayload;
     const data = unwrapAuthResponse(raw);
     await setToken(data.token);
+    await setCachedUser(data.user);
     return data;
   },
 
@@ -256,6 +261,7 @@ export const authService = {
       })) as ApiAuthPayload;
       const data = unwrapAuthResponse(raw);
       await setToken(data.token);
+      await setCachedUser(data.user);
       return data;
     } catch (err) {
       if (isDemoAuthEnabled() && isNetworkError(err)) {
@@ -347,6 +353,34 @@ export const authService = {
       throw new Error('Could not load profile');
     }
     return unwrapAuthResponse({ token: 'unused', user: raw.user }).user;
+  },
+
+  /**
+   * Restore a persisted session on app launch. Returns the saved user + token
+   * if the stored JWT is still valid (kept up to 30 days by the backend).
+   * Falls back to the cached user when the device is offline so reopening the
+   * app keeps the user signed in.
+   */
+  async loadStoredSession(): Promise<LoginResponse | null> {
+    const token = await getToken();
+    if (!token || isDemoSessionToken(token)) {
+      await clearToken();
+      return null;
+    }
+
+    try {
+      const user = await this.getCurrentUser();
+      await setCachedUser(user);
+      return { user, token };
+    } catch (err) {
+      const cached = await getCachedUser<AuthUser>();
+      if (cached && isNetworkError(err)) {
+        return { user: cached, token };
+      }
+      // 401/expired or no cache → require a fresh login.
+      await clearToken();
+      return null;
+    }
   },
 
   async getProfile(): Promise<LoginResponse['user']> {

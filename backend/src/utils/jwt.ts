@@ -12,7 +12,7 @@ export const generateToken = (payload: {
   tokenVersion?: number;
 }): string => {
   const secret = process.env.JWT_SECRET!;
-  const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
+  const expiresIn = process.env.JWT_EXPIRES_IN || '30d';
   const body: JwtPayload = {
     id: payload.id,
     role: payload.role,

@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
 const TOKEN_KEY = 'atomik_token';
+const USER_KEY = 'atomik_user';
 
 let secureStoreAvailable: boolean | null = null;
 
@@ -63,4 +64,31 @@ export async function clearToken(): Promise<void> {
     }
   }
   await AsyncStorage.removeItem(TOKEN_KEY);
+  await clearCachedUser();
+}
+
+/** Cached user profile for instant session restore on app launch (non-secret). */
+export async function setCachedUser(user: unknown): Promise<void> {
+  try {
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
+  } catch {
+    // ignore
+  }
+}
+
+export async function getCachedUser<T = unknown>(): Promise<T | null> {
+  try {
+    const raw = await AsyncStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearCachedUser(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(USER_KEY);
+  } catch {
+    // ignore
+  }
 }
