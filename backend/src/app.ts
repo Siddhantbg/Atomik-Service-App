@@ -19,6 +19,7 @@ import paymentRoutes from './routes/payments';
 import venueRoutes from './routes/venues';
 import adminRoutes from './routes/admin';
 import notificationRoutes from './routes/notifications';
+import legalRoutes from './routes/legal';
 
 export function createApp(): express.Application {
   const app = express();
@@ -47,6 +48,10 @@ export function createApp(): express.Application {
       credentials: true,
     })
   );
+
+  // Public legal/support pages (App Store requirement). Registered before the
+  // security middleware so Helmet's CSP does not strip their inline styles.
+  app.use(legalRoutes);
 
   app.post(
     '/api/payments/webhook',
