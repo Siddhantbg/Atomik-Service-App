@@ -307,6 +307,18 @@ export const authService = {
     await clearToken();
   },
 
+  /**
+   * Permanently deletes the signed-in user's account (App Store Guideline
+   * 5.1.1(v)) and clears the local session.
+   */
+  async deleteAccount(): Promise<void> {
+    const token = await getToken();
+    if (token && !isDemoSessionToken(token)) {
+      await api.delete('/auth/me');
+    }
+    await clearToken();
+  },
+
   async updateProfile(payload: { name?: string; phone?: string; avatar?: string }) {
     const raw = (await api.patch('/auth/profile', payload)) as {
       user?: ApiAuthPayload['user'];

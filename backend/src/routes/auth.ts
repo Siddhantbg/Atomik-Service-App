@@ -12,6 +12,7 @@ import {
   updateFcmToken,
   updateProfile,
   uploadAvatar,
+  deleteAccount,
 } from '../controllers/authController';
 import { avatarUpload } from '../middleware/uploadAvatar';
 import { sendSignupOtp, confirmPhoneOtp } from '../controllers/otpController';
@@ -73,6 +74,7 @@ router.post(
 );
 
 router.get('/me', authenticate, getMe);
+router.delete('/me', authenticate, deleteAccount);
 router.get(
   '/technicians',
   authenticate,

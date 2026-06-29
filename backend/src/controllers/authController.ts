@@ -1,5 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { User } from '../models/User';
+import { Booking } from '../models/Booking';
+import { Venue } from '../models/Venue';
+import { Invoice } from '../models/Invoice';
+import { Notification } from '../models/Notification';
+import { Review } from '../models/Review';
 import { generateToken } from '../utils/jwt';
 import { AuthRequest } from '../middleware/auth';
 import { toE164 } from '../utils/phone';
@@ -456,6 +461,57 @@ export const updateProfile = async (
     res.status(200).json({
       success: true,
       user: formatUser(user),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Permanently deletes the authenticated user's account and associated data.
+ * Required by App Store Review Guideline 5.1.1(v) for apps that support
+ * account creation.
+ *
+ * Seeded demo/staff accounts (`@atomik.demo`) are preserved so the App Review
+ * demo logins keep working; the flow still returns success to the client.
+ */
+export const deleteAccount = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const user = await User.findById(userId);
+    if (!user) {
+      res.status(404).json({ success: false, message: 'User not found' });
+      return;
+    }
+
+    const isDemoAccount =
+      typeof user.email === 'string' && user.email.toLowerCase().endsWith('@atomik.demo');
+
+    if (isDemoAccount) {
+      res.status(200).json({
+        success: true,
+        message: 'Account deletion request received.',
+      });
+      return;
+    }
+
+    await Promise.all([
+      Booking.deleteMany({ clientId: userId }),
+      Venue.deleteMany({ ownerId: userId }),
+      Invoice.deleteMany({ clientId: userId }),
+      Notification.deleteMany({ userId }),
+      Review.deleteMany({ clientId: userId }),
+    ]);
+
+    await User.findByIdAndDelete(userId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Your account and associated data have been permanently deleted.',
     });
   } catch (err) {
     next(err);

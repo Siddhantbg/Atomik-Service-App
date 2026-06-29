@@ -97,6 +97,37 @@ export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
     ]);
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all associated data, including your venues, bookings, and invoices. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                await authService.deleteAccount();
+                Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
+              } catch (err) {
+                Alert.alert(
+                  'Could Not Delete Account',
+                  err instanceof Error
+                    ? err.message
+                    : 'Something went wrong. Please try again.'
+                );
+                return;
+              }
+              dispatch(logout());
+            })();
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <Screen>
       <Header title="Profile" />
@@ -192,6 +223,13 @@ export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
             icon="log-out-outline"
             label="Logout"
             onPress={handleLogout}
+            danger
+          />
+          <View style={styles.menuDivider} />
+          <MenuItem
+            icon="trash-outline"
+            label="Delete Account"
+            onPress={handleDeleteAccount}
             danger
           />
         </Card>
