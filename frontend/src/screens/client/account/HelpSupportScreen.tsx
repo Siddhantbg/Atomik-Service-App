@@ -11,11 +11,11 @@ export const HelpSupportScreen: React.FC = () => (
       <Text style={styles.body}>
         For booking issues, technician delays, or billing questions, reach our support team.
       </Text>
-      <TouchableOpacity onPress={() => Linking.openURL('mailto:support@atomik.demo')}>
-        <Text style={styles.link}>support@atomik.demo</Text>
+      <TouchableOpacity onPress={() => Linking.openURL('mailto:support@atomikaudio.com')}>
+        <Text style={styles.link}>support@atomikaudio.com</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => Linking.openURL('tel:+919876543210')}>
-        <Text style={[styles.link, styles.linkSpaced]}>+91 98765 43210</Text>
+      <TouchableOpacity onPress={() => Linking.openURL('tel:+919840117995')}>
+        <Text style={[styles.link, styles.linkSpaced]}>+91 98401 17995</Text>
       </TouchableOpacity>
     </Card>
     <Card padding={16} style={styles.card}>

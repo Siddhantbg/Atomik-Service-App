@@ -6,7 +6,9 @@ import { Router } from 'express';
  * Helmet's CSP does not strip the inline styles used here.
  */
 
-const SUPPORT_EMAIL = 'djsahilmadan@gmail.com';
+const SUPPORT_EMAIL = 'support@atomikaudio.com';
+const SUPPORT_PHONE = '+91 98401 17995';
+const SUPPORT_PHONE_TEL = '+919840117995';
 const EFFECTIVE_DATE = 'June 25, 2026';
 
 const baseStyles = `
@@ -110,7 +112,8 @@ const privacyBody = `
 
   <h2>Contact Us</h2>
   <div class="card">
-    Questions about this policy or your data? Email <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.
+    Questions about this policy or your data? Email <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>
+    or call <a href="tel:${SUPPORT_PHONE_TEL}">${SUPPORT_PHONE}</a>.
   </div>
 `;
 
@@ -122,6 +125,7 @@ const supportBody = `
   <h2>Contact</h2>
   <div class="card">
     <p style="margin:0 0 6px"><strong>Email:</strong> <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
+    <p style="margin:0 0 6px"><strong>Phone:</strong> <a href="tel:${SUPPORT_PHONE_TEL}">${SUPPORT_PHONE}</a></p>
     <p style="margin:0"><strong>Response time:</strong> typically within 1–2 business days.</p>
   </div>
 

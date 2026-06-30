@@ -22,22 +22,26 @@ interface StaffAccount {
  * Set these in backend/.env (gitignored) or inline before running:
  *   STAFF_ADMIN_PASSWORD, STAFF_MASTER_PASSWORD, STAFF_TECH_PASSWORD
  */
+// NOTE: Phone numbers are arbitrary placeholders kept out of source control as
+// real personal numbers. Override per-account at seed time with the
+// STAFF_*_PHONE env vars (falling back to these placeholders) so real numbers
+// never need to be committed.
 const STAFF: StaffAccount[] = [
   {
-    name: 'Sahil',
-    phone: '8088675627',
+    name: 'Admin',
+    phone: process.env.STAFF_ADMIN_PHONE?.trim() || '9000000001',
     passwordEnv: 'STAFF_ADMIN_PASSWORD',
     role: 'admin',
   },
   {
-    name: 'Sultan',
-    phone: '8088644033',
+    name: 'Master Technician',
+    phone: process.env.STAFF_MASTER_PHONE?.trim() || '9000000002',
     passwordEnv: 'STAFF_MASTER_PASSWORD',
     role: 'master_technician',
   },
   {
-    name: 'Sourav',
-    phone: '8310243378',
+    name: 'Technician',
+    phone: process.env.STAFF_TECH_PHONE?.trim() || '9000000003',
     passwordEnv: 'STAFF_TECH_PASSWORD',
     role: 'technician',
   },
