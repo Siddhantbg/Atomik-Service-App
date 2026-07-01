@@ -78,15 +78,12 @@ export const PhoneOtpVerification: React.FC<Props> = ({
 
   const handleSendOtp = async () => {
     if (!phoneReady || phoneVerified) return;
-    // Single-flight guard: ignore taps while a request is in flight or while
-    // the resend cooldown is still active.
     if (sendLock.current || sendingOtp || resendIn > 0) return;
 
     sendLock.current = true;
     setSendingOtp(true);
-    // Lock the button immediately (optimistic 30s cooldown) so a burst of taps
-    // can never queue multiple sends before the network response arrives.
     setResendIn(30);
+    setOtpSent(true);
     setLocalOtpError('');
     onClearOtpError?.();
     setVerified(false);
@@ -94,14 +91,12 @@ export const PhoneOtpVerification: React.FC<Props> = ({
     onOtpChangeRef.current?.('');
     try {
       const result = await authService.sendOtp(phone, purpose);
-      setOtpSent(true);
       setResendIn(result.resendAfter > 0 ? result.resendAfter : 30);
     } catch (err: any) {
+      setOtpSent(false);
       if (typeof err.retryAfter === 'number' && err.retryAfter > 0) {
-        // Server-enforced cooldown — keep the button locked for that long.
         setResendIn(err.retryAfter);
       } else {
-        // Genuine failure (network/validation): let the user retry right away.
         setResendIn(0);
       }
       setLocalOtpError(err.message || 'Could not send code');
@@ -166,7 +161,7 @@ export const PhoneOtpVerification: React.FC<Props> = ({
             !phoneReady ||
             phoneVerified ||
             sendingOtp ||
-            (otpSent && resendIn > 0)
+            resendIn > 0
           }
           variant="outline"
           style={styles.otpBtn}

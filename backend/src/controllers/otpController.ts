@@ -97,48 +97,70 @@ export const sendSignupOtp = async (
       $or: [{ smsSentAt: { $exists: false } }, { expiresAt: { $lte: new Date() } }],
     });
 
+    const cooldownSince = new Date(Date.now() - RESEND_COOLDOWN_MS);
     const recent = await OtpVerification.findOne({
       phone: e164,
-      smsSentAt: { $exists: true },
+      smsSentAt: { $gt: cooldownSince },
       expiresAt: { $gt: new Date() },
     }).sort({ smsSentAt: -1 });
 
     if (recent?.smsSentAt) {
       const elapsed = Date.now() - recent.smsSentAt.getTime();
-      if (elapsed < RESEND_COOLDOWN_MS) {
-        const retryAfter = Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 1000);
-        res.status(429).json({
-          success: false,
-          message: `Please wait ${retryAfter}s before requesting another code`,
-          retryAfter,
-        });
-        return;
-      }
+      const retryAfter = Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 1000);
+      res.status(429).json({
+        success: false,
+        message: `Please wait ${retryAfter}s before requesting another code`,
+        retryAfter,
+      });
+      return;
     }
+
+    // Reserve the cooldown immediately so parallel taps cannot send multiple SMS.
+    const sendStartedAt = new Date();
+    await OtpVerification.findOneAndUpdate(
+      { phone: e164 },
+      {
+        $set: {
+          phone: e164,
+          purpose,
+          smsSentAt: sendStartedAt,
+          expiresAt: new Date(Date.now() + OTP_TTL_MS),
+          attempts: 0,
+        },
+        $unset: { codeHash: '', appwriteUserId: '', verifiedAt: '' },
+      },
+      { upsert: true }
+    );
 
     if (isAppwriteConfigured()) {
       const { userId } = await appwriteSendPhoneToken(e164);
-      await OtpVerification.deleteMany({ phone: e164 });
-      await OtpVerification.create({
-        phone: e164,
-        appwriteUserId: userId,
-        purpose,
-        expiresAt: new Date(Date.now() + OTP_TTL_MS),
-        attempts: 0,
-        smsSentAt: new Date(),
-      });
+      await OtpVerification.findOneAndUpdate(
+        { phone: e164 },
+        {
+          $set: {
+            appwriteUserId: userId,
+            purpose,
+            smsSentAt: sendStartedAt,
+            expiresAt: new Date(Date.now() + OTP_TTL_MS),
+            attempts: 0,
+          },
+        }
+      );
     } else {
       const code = generateOtpCode(6);
       await sendOtpSms(phoneRaw, code);
-      await OtpVerification.deleteMany({ phone: e164 });
-      await OtpVerification.create({
-        phone: e164,
-        codeHash: hashOtpCode(code),
-        purpose,
-        expiresAt: new Date(Date.now() + OTP_TTL_MS),
-        attempts: 0,
-        smsSentAt: new Date(),
-      });
+      await OtpVerification.findOneAndUpdate(
+        { phone: e164 },
+        {
+          $set: {
+            codeHash: hashOtpCode(code),
+            purpose,
+            smsSentAt: sendStartedAt,
+            expiresAt: new Date(Date.now() + OTP_TTL_MS),
+            attempts: 0,
+          },
+        }
+      );
     }
 
     res.status(200).json({

@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BookingFlowHeader } from '../../../components/booking/BookingFlowHeader';
 import { OrderActionRow } from '../../../components/booking/OrderActionRow';
 import { useBookingDraft } from '../../../context/BookingDraftContext';
-import { getServiceById } from '../../../constants/audioServices';
+import { getServiceById, GENERAL_SERVICE_PACKAGE } from '../../../constants/audioServices';
 import { bookingService } from '../../../services/bookings';
 import { COLORS } from '../../../constants/colors';
 import { formatBookingDate, formatBookingTime } from '../../../utils/schedule';
@@ -128,11 +128,24 @@ export const PlaceOrderScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  const handleBack = () => {
+    const cats = draft.categoryIds;
+    if (cats.includes('general-visit')) {
+      navigation.navigate('ServiceCategories');
+      return;
+    }
+    if (cats.includes(GENERAL_SERVICE_PACKAGE.id)) {
+      navigation.navigate('ServiceSubcategories');
+      return;
+    }
+    navigation.goBack();
+  };
+
   return (
     <View style={styles.container}>
       <BookingFlowHeader
         title="Place order"
-        onBack={() => navigation.goBack()}
+        onBack={handleBack}
       />
       <ScrollView contentContainerStyle={styles.scroll}>
         {!holdActive && draft.scheduledTime ? (
@@ -167,7 +180,7 @@ export const PlaceOrderScreen: React.FC<Props> = ({ navigation }) => {
           })}
           <TouchableOpacity
             style={styles.addCategory}
-            onPress={() => navigation.navigate('ServiceSubcategories')}
+            onPress={() => navigation.navigate('ServiceCategories', { reset: false })}
           >
             <Ionicons name="add" size={28} color={COLORS.gray} />
           </TouchableOpacity>

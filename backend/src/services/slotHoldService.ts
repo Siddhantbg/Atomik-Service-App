@@ -97,6 +97,10 @@ export async function getSlotAvailability(
   ]);
 
   const bookedTimes = new Set(bookings.map((b) => b.scheduledTime));
+  const morningSlot = normalizeSlotTime('11:00 AM');
+  const morningBooked = bookedTimes.has(morningSlot);
+  const morningHeld = holds.some((h) => h.scheduledTime === morningSlot);
+  const morningTaken = morningBooked || morningHeld;
   const holdByTime = new Map<string, (typeof holds)[0]>();
   for (const h of holds) {
     holdByTime.set(h.scheduledTime, h);
@@ -104,6 +108,13 @@ export async function getSlotAvailability(
 
   const slots: SlotAvailabilityItem[] = BOOKING_TIME_SLOTS.map((displayTime) => {
     const normalized = normalizeSlotTime(displayTime);
+    const isAfternoonSlot =
+      normalized === normalizeSlotTime('02:00 PM') ||
+      normalized === normalizeSlotTime('05:00 PM');
+
+    if (morningTaken && isAfternoonSlot) {
+      return { time: displayTime, status: 'booked' };
+    }
     if (bookedTimes.has(normalized)) {
       return { time: displayTime, status: 'booked' };
     }
@@ -153,6 +164,24 @@ export async function holdSlot(
 
   if (await isSlotBooked(scheduledDate, scheduledTime)) {
     throw new BadRequestError('This slot is already booked');
+  }
+
+  const morningSlot = normalizeSlotTime('11:00 AM');
+  const isAfternoon =
+    scheduledTime === normalizeSlotTime('02:00 PM') ||
+    scheduledTime === normalizeSlotTime('05:00 PM');
+  if (isAfternoon) {
+    if (await isSlotBooked(scheduledDate, morningSlot)) {
+      throw new BadRequestError('Morning slot is booked — afternoon slots are unavailable');
+    }
+    const morningHold = await SlotHold.findOne({
+      scheduledDate,
+      scheduledTime: morningSlot,
+      expiresAt: { $gt: new Date() },
+    });
+    if (morningHold) {
+      throw new BadRequestError('Morning slot is held — afternoon slots are unavailable');
+    }
   }
 
   const otherHold = await SlotHold.findOne({

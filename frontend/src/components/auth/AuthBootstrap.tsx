@@ -38,7 +38,6 @@ export const AuthBootstrap: React.FC<Props> = ({ children }) => {
             .loadStoredSession()
             .then((fresh) => {
               if (fresh) dispatch(restoreSession(fresh));
-              else dispatch(logout());
             })
             .catch(() => {});
           return;

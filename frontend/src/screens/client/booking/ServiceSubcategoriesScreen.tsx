@@ -35,7 +35,13 @@ export const ServiceSubcategoriesScreen: React.FC<Props> = ({ navigation }) => {
     <View style={styles.container}>
       <BookingFlowHeader
         title="General Service"
-        onBack={() => navigation.goBack()}
+        onBack={() => {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.navigate('ServiceCategories');
+          }
+        }}
       />
       <ScrollView
         contentContainerStyle={styles.scroll}

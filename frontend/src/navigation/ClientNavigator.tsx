@@ -87,7 +87,26 @@ const ClientTabs = () => {
         })
       }
     >
-      <Tab.Screen name="Home" component={HomeStack} />
+      <Tab.Screen
+        name="Home"
+        component={HomeStack}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('Home', { screen: 'HomeMain' });
+          },
+          focus: () => {
+            const tabState = navigation.getState();
+            const homeRoute = tabState.routes.find((r) => r.name === 'Home');
+            const stack = homeRoute?.state;
+            if (!stack?.routes?.length) return;
+            const idx = stack.index ?? stack.routes.length - 1;
+            const current = stack.routes[idx];
+            if (current?.name === 'Notifications') {
+              navigation.navigate('Home', { screen: 'HomeMain' });
+            }
+          },
+        })}
+      />
       <Tab.Screen
         name="Services"
         component={ServicesStack}

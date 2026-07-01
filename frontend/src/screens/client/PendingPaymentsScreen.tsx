@@ -5,6 +5,7 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -12,6 +13,7 @@ import { Badge } from '../../components/common/Badge';
 import { LoadingView } from '../../components/common/LoadingView';
 import { ErrorView } from '../../components/common/ErrorView';
 import { formatPaymentAmount, paymentService, Invoice } from '../../services/payments';
+import { bookingService } from '../../services/bookings';
 import {
   getClientSparePartsPayAmount,
   getInvoiceBalanceDue,
@@ -53,6 +55,27 @@ export const PendingPaymentsScreen: React.FC<Props> = ({ navigation }) => {
     const booking =
       typeof item.bookingId === 'object' ? item.bookingId : null;
     return booking?.spareParts;
+  };
+
+  const handleCancel = (item: Invoice) => {
+    const booking =
+      typeof item.bookingId === 'object' ? item.bookingId : null;
+    if (!booking?._id) return;
+    Alert.alert('Cancel booking?', 'This will cancel the unpaid booking.', [
+      { text: 'Keep', style: 'cancel' },
+      {
+        text: 'Cancel booking',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await bookingService.cancelBooking(booking._id, 'Cancelled from payments');
+            load();
+          } catch (e: any) {
+            Alert.alert('Could not cancel', e.message || 'Try again');
+          }
+        },
+      },
+    ]);
   };
 
   const handlePay = (item: Invoice) => {
@@ -119,21 +142,28 @@ export const PendingPaymentsScreen: React.FC<Props> = ({ navigation }) => {
                       : getInvoiceBalanceDue(item)
                   )}
                 </Text>
-                <TouchableOpacity
-                  style={styles.payBtn}
-                  onPress={() => handlePay(item)}
-                >
-                  <Text style={styles.payBtnText}>
-                    {isExtraPartsOnlyPayment(item, lines)
-                      ? 'PAY EXTRA'
-                      : 'PAY NOW'}
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.cardActions}>
+                  <TouchableOpacity
+                    style={styles.cancelBtn}
+                    onPress={() => handleCancel(item)}
+                  >
+                    <Text style={styles.cancelBtnText}>CANCEL</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.payBtn}
+                    onPress={() => handlePay(item)}
+                  >
+                    <Text style={styles.payBtnText}>
+                      {isExtraPartsOnlyPayment(item, lines)
+                        ? 'PAY EXTRA'
+                        : 'PAY NOW'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           );
         }}
-        keyExtractor={(item) => item._id}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
@@ -204,6 +234,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   amount: {
     fontFamily: 'Montserrat_700Bold',
     fontSize: 18,
@@ -214,6 +249,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
+  },
+  cancelBtn: {
+    borderWidth: 1,
+    borderColor: COLORS.grayDark,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  cancelBtnText: {
+    fontFamily: 'Montserrat_600SemiBold',
+    fontSize: 11,
+    color: COLORS.gray,
+    letterSpacing: 1,
   },
   payBtnText: {
     fontFamily: 'Montserrat_600SemiBold',

@@ -31,9 +31,9 @@ export const ServiceCategoriesScreen: React.FC<Props> = ({
     if (route?.params?.reset) resetDraft();
     if (preselect === 'general-visit') {
       addCategory('general-visit');
-      navigation.replace('PlaceOrder');
+      navigation.navigate('PlaceOrder');
     } else if (preselect === 'general-service') {
-      navigation.replace('ServiceSubcategories');
+      navigation.navigate('ServiceSubcategories');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

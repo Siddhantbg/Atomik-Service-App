@@ -68,6 +68,7 @@ const razorpayHtml = (key: string, orderId: string, amount: number, name: string
     order_id: "${escapeJsString(orderId)}",
     theme: { color: "#8e302f" },
     handler: function (response) {
+      try { rzp.close(); } catch (e) {}
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'success',
         razorpay_order_id: response.razorpay_order_id,
@@ -228,6 +229,40 @@ export const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
+  const handleCancelBooking = () => {
+    if (!bookingId) return;
+    Alert.alert(
+      'Cancel booking?',
+      'This will cancel your unpaid booking. You can book again anytime.',
+      [
+        { text: 'Keep booking', style: 'cancel' },
+        {
+          text: 'Cancel booking',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              await bookingService.cancelBooking(bookingId, 'Cancelled by client before payment');
+              Alert.alert('Booking cancelled', 'Your booking has been cancelled.', [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    const tabNav = navigation.getParent();
+                    tabNav?.navigate('Home', { screen: 'HomeMain' });
+                  },
+                },
+              ]);
+            } catch (e: any) {
+              Alert.alert('Could not cancel', e.message || 'Try again');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const onWebViewMessage = async (event: { nativeEvent: { data: string } }) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -357,6 +392,15 @@ export const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         )}
       </ScrollView>
       <View style={styles.footer}>
+        {bookingId ? (
+          <Button
+            label="CANCEL BOOKING"
+            onPress={handleCancelBooking}
+            variant="outline"
+            disabled={loading}
+            style={styles.cancelBtn}
+          />
+        ) : null}
         <Button
           label={
             process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID?.includes('your_key')
@@ -462,6 +506,10 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 36,
     backgroundColor: COLORS.background,
+    gap: 10,
+  },
+  cancelBtn: {
+    borderColor: COLORS.red,
   },
   webviewWrap: { flex: 1, backgroundColor: COLORS.background },
 });
