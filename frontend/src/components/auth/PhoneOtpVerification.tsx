@@ -51,7 +51,10 @@ export const PhoneOtpVerification: React.FC<Props> = ({
   const phoneReady = digits.length >= 10;
 
   useEffect(() => {
-    if (resendIn <= 0) return;
+    if (resendIn <= 0) {
+      sendLock.current = false;
+      return;
+    }
     const timer = setTimeout(() => setResendIn((s) => s - 1), 1000);
     return () => clearTimeout(timer);
   }, [resendIn]);
@@ -93,16 +96,17 @@ export const PhoneOtpVerification: React.FC<Props> = ({
       const result = await authService.sendOtp(phone, purpose);
       setResendIn(result.resendAfter > 0 ? result.resendAfter : 30);
     } catch (err: any) {
-      setOtpSent(false);
       if (typeof err.retryAfter === 'number' && err.retryAfter > 0) {
+        setOtpSent(true);
         setResendIn(err.retryAfter);
       } else {
+        setOtpSent(false);
         setResendIn(0);
+        sendLock.current = false;
       }
       setLocalOtpError(err.message || 'Could not send code');
     } finally {
       setSendingOtp(false);
-      sendLock.current = false;
     }
   };
 

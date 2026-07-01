@@ -69,6 +69,9 @@ const razorpayHtml = (key: string, orderId: string, amount: number, name: string
     theme: { color: "#8e302f" },
     handler: function (response) {
       try { rzp.close(); } catch (e) {}
+      setTimeout(function() {
+        try { rzp.close(); } catch (e) {}
+      }, 300);
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'success',
         razorpay_order_id: response.razorpay_order_id,
@@ -392,26 +395,31 @@ export const PaymentScreen: React.FC<Props> = ({ navigation, route }) => {
         )}
       </ScrollView>
       <View style={styles.footer}>
-        {bookingId ? (
+        <View style={styles.footerActions}>
+          {bookingId ? (
+            <Button
+              label="CANCEL"
+              onPress={handleCancelBooking}
+              variant="outline"
+              disabled={loading}
+              style={styles.footerBtn}
+              fullWidth={false}
+            />
+          ) : null}
           <Button
-            label="CANCEL BOOKING"
-            onPress={handleCancelBooking}
-            variant="outline"
-            disabled={loading}
-            style={styles.cancelBtn}
+            label={
+              process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID?.includes('your_key')
+                ? `DEMO · ${formatINR(amountToPay)}`
+                : isExtraParts
+                  ? `PAY EXTRA · ${formatINR(amountToPay)}`
+                  : `PAY NOW · ${formatINR(amountToPay)}`
+            }
+            onPress={handlePayment}
+            loading={loading}
+            style={[styles.footerBtn, !bookingId && styles.footerBtnFull]}
+            fullWidth={false}
           />
-        ) : null}
-        <Button
-          label={
-            process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID?.includes('your_key')
-              ? `CONFIRM DEMO · ${formatINR(amountToPay)}`
-              : isExtraParts
-                ? `PAY EXTRA PARTS · ${formatINR(amountToPay)}`
-                : `PAY NOW · ${formatINR(amountToPay)}`
-          }
-          onPress={handlePayment}
-          loading={loading}
-        />
+        </View>
       </View>
       <Modal visible={webviewVisible} animationType="slide">
         <View style={styles.webviewWrap}>
@@ -506,7 +514,18 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 36,
     backgroundColor: COLORS.background,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
+  },
+  footerBtn: {
+    flex: 1,
+    minWidth: 0,
+  },
+  footerBtnFull: {
+    flex: 1,
   },
   cancelBtn: {
     borderColor: COLORS.red,

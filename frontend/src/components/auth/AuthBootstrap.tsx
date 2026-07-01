@@ -34,6 +34,7 @@ export const AuthBootstrap: React.FC<Props> = ({ children }) => {
         const cached = await authService.loadCachedSession();
         if (cached) {
           dispatch(restoreSession(cached));
+          setReady(true);
           authService
             .loadStoredSession()
             .then((fresh) => {

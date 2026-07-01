@@ -151,11 +151,28 @@ export const ScheduleBookingScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  const morningSlot = '11:00 AM';
+  const morningStatus = slotMap[morningSlot]?.status;
+  const morningTaken =
+    morningStatus === 'booked' || morningStatus === 'held_by_other';
+
+  const effectiveStatus = (
+    slot: string,
+    info?: SlotAvailabilityItem
+  ): SlotStatus | undefined => {
+    const isAfternoon = slot === '02:00 PM' || slot === '05:00 PM';
+    if (serviceType === 'inspection' && morningTaken && isAfternoon) {
+      return 'booked';
+    }
+    return info?.status;
+  };
+
   const selectSlot = async (slot: string) => {
     if (!dateIso || holdingSlot) return;
 
     const info = slotMap[slot];
-    if (info?.status === 'booked' || info?.status === 'held_by_other') {
+    const status = effectiveStatus(slot, info);
+    if (status === 'booked' || status === 'held_by_other') {
       return;
     }
 
@@ -309,7 +326,8 @@ export const ScheduleBookingScreen: React.FC<Props> = ({ navigation }) => {
           <View style={styles.slots}>
             {timeSlots.map((slot) => {
               const info = slotMap[slot];
-              const { touchable, text, disabled } = slotStyle(slot, info?.status);
+              const status = effectiveStatus(slot, info);
+              const { touchable, text, disabled } = slotStyle(slot, status);
               return (
                 <TouchableOpacity
                   key={slot}

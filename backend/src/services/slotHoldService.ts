@@ -228,6 +228,24 @@ export async function assertValidHoldForBooking(
     throw new BadRequestError('This time slot is no longer available');
   }
 
+  const morningSlot = normalizeSlotTime('11:00 AM');
+  const isAfternoon =
+    scheduledTime === normalizeSlotTime('02:00 PM') ||
+    scheduledTime === normalizeSlotTime('05:00 PM');
+  if (isAfternoon) {
+    if (await isSlotBooked(scheduledDate, morningSlot)) {
+      throw new BadRequestError('Morning slot is booked — afternoon slots are unavailable');
+    }
+    const morningHold = await SlotHold.findOne({
+      scheduledDate,
+      scheduledTime: morningSlot,
+      expiresAt: { $gt: new Date() },
+    });
+    if (morningHold) {
+      throw new BadRequestError('Morning slot is held — afternoon slots are unavailable');
+    }
+  }
+
   const hold = await SlotHold.findOne({
     clientId: toObjectId(clientId),
     scheduledDate,
